@@ -30,10 +30,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class HostData {
-
     private String hostName;
     private int pid;
     Map<String, String> systemProperties;
+    Map<String, Object> hostData;
 
     public String getSystemProperty(final String property) {
         return systemProperties.get(property);
@@ -76,5 +76,44 @@ public class HostData {
         }
         if (this.systemProperties == null)
             this.systemProperties = new HashMap<String,String>();
+        buildeHostData();
+    }
+
+    private void buildeHostData() {
+        hostData = new HashMap<String,Object>();
+        hostData.put("@version", 1);
+
+        Map<String,Object> host = new HashMap<String,Object>();
+        hostData.put("host", host);
+
+        host.put("name", getHostName());
+        host.put("architecture", getSystemProperty("os.arch"));
+
+        Map<String,Object> os = new HashMap<String,Object>();
+        host.put("os", os);
+
+        os.put("name", getSystemProperty("os.name"));
+        os.put("version", getSystemProperty("os.version"));
+
+
+        Map<String,Object> process = new HashMap<String,Object>();
+        hostData.put("process", process);
+        process.put("pid", getPID());
+
+        Map<String,Object> java = new HashMap<String,Object>();
+        hostData.put("java", java);
+
+        java.put("version", getSystemProperty("java.version"));
+        java.put("vendor", getSystemProperty("java.vendor"));
+        java.put("home", getSystemProperty("java.home"));
+
+        try {
+            java.put("bits", Integer.parseInt(getSystemProperty("sun.arch.data.model")));
+        } catch (final NumberFormatException e) {
+        }
+    }
+
+    public Map<String, Object> getCopy() {
+        return new HashMap<String, Object>(hostData);
     }
 }

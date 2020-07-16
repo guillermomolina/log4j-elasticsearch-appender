@@ -25,10 +25,6 @@ package org.apache.log4j.elasticsearch;
 
 import org.apache.log4j.elasticsearch.data.HostData;
 
-import com.google.gson.Gson;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.apache.log4j.Layout;
@@ -37,10 +33,11 @@ import org.apache.log4j.spi.LocationInfo;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.ThrowableInformation;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.TimeZone;
 
 public class JSONEventLayout extends Layout {
-
     private boolean locationInfo = false;
     private String customUserFields;
 
@@ -48,13 +45,10 @@ public class JSONEventLayout extends Layout {
 
     private boolean activeIgnoreThrowable = ignoreThrowable;
     private final HostData hostData = new HostData();
-    private String threadName;
-    private long timestamp;
     // private String ndc;
-    private LocationInfo info;
-    private static Integer version = 1;
 
-    private JsonObject logstashEvent;
+    // private JsonObject logstashEvent;
+    private Map<String, Object> jsonEvent;
 
     public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
     public static final FastDateFormat ISO_DATETIME_TIME_ZONE_FORMAT_WITH_MILLIS = FastDateFormat
@@ -82,26 +76,66 @@ public class JSONEventLayout extends Layout {
      */
     public JSONEventLayout(final boolean locationInfo) {
         this.locationInfo = locationInfo;
-        // logstashEvent = new JsonObject();
     }
 
     public String format(final LoggingEvent loggingEvent) {
-        threadName = loggingEvent.getThreadName();
-        timestamp = loggingEvent.timeStamp;
-        // ndc = loggingEvent.getNDC();
-
-        logstashEvent = new JsonObject();
+        final Long timestamp = loggingEvent.timeStamp;
+        final String loggerName = loggingEvent.getLoggerName();
         final String whoami = this.getClass().getSimpleName();
 
-        /**
-         * All v1 of the event format requires is "@timestamp" and "@version" Every
-         * other field is arbitrary
-         */
-        logstashEvent.addProperty("@version", version);
-        logstashEvent.addProperty("@timestamp", dateFormat(timestamp));
+        jsonEvent = hostData.getCopy();
 
-        final String loggerName = loggingEvent.getLoggerName();
-        addEventData("log.logger", loggerName);
+        jsonEvent.put("@timestamp", timestamp);
+        jsonEvent.put("message", loggingEvent.getRenderedMessage());
+
+        if (!activeIgnoreThrowable && loggingEvent.getThrowableInformation() != null) {
+            final ThrowableInformation throwableInformation = loggingEvent.getThrowableInformation();
+            final String type = throwableInformation.getThrowable().getClass().getCanonicalName();
+            final String message = throwableInformation.getThrowable().getMessage();
+            final String[] stackTrace = throwableInformation.getThrowableStrRep();
+
+            if (type != null || message != null || stackTrace != null) {
+                Map<String, Object> error = new HashMap<String, Object>();
+                jsonEvent.put("error", error);
+
+                if (type != null)
+                    error.put("type", type);
+                if (message != null)
+                    error.put("message", message);
+                if (stackTrace != null)
+                    error.put("stack_trace", StringUtils.join(stackTrace, "\n"));
+            }
+        }
+
+        Map<String, Object> log = new HashMap<String, Object>();
+        jsonEvent.put("log", log);
+        log.put("logger", loggerName);
+        log.put("level", loggingEvent.getLevel().toString());
+        
+        if (locationInfo) {
+            final LocationInfo info = loggingEvent.getLocationInformation();
+            final String file_name = info.getFileName();
+            final String line_number = info.getLineNumber();
+            final String class_name = info.getClassName();
+            final String method_name = info.getMethodName();
+
+            if (file_name != "?" && line_number != "?" && class_name != "?" && method_name != "?") {
+                Map<String, Object> origin = new HashMap<String, Object>();
+                log.put("origin", origin);
+                origin.put("class", class_name);
+                origin.put("function", method_name);
+                Map<String, Object> file = new HashMap<String, Object>();
+                origin.put("file", file);
+                file.put("name", file_name);
+                try {
+                    file.put("line", Integer.parseInt(line_number));
+                } catch (final NumberFormatException e) {
+                }
+
+            }
+        }
+
+        addEventData("process.thread.name", loggingEvent.getThreadName());
 
         /**
          * Extract and add fields from log4j config, if defined
@@ -126,60 +160,7 @@ public class JSONEventLayout extends Layout {
             addUserFields(userFieldsProperty, loggerName);
         }
 
-        /**
-         * Now we start injecting our own stuff.
-         */
-        addEventData("message", loggingEvent.getRenderedMessage());
-        addEventData("host.name", hostData.getHostName());
-        addEventData("host.architecture", hostData.getSystemProperty("os.arch"));
-        addEventData("host.os.name", hostData.getSystemProperty("os.name"));
-        addEventData("host.os.version", hostData.getSystemProperty("os.version"));
-        addEventData("process.pid", hostData.getPID());
-
-        addEventData("java.version", hostData.getSystemProperty("java.version"));
-        addEventData("java.vendor", hostData.getSystemProperty("java.vendor"));
-        addEventData("java.home", hostData.getSystemProperty("java.home"));
-
-        try {
-            addEventData("java.bits", Integer.parseInt(hostData.getSystemProperty("sun.arch.data.model")));
-        } catch (final NumberFormatException e) {
-        }
-
-        if (!activeIgnoreThrowable && loggingEvent.getThrowableInformation() != null) {
-            final ThrowableInformation throwableInformation = loggingEvent.getThrowableInformation();
-            if (throwableInformation.getThrowable().getClass().getCanonicalName() != null) {
-                addEventData("error.type", throwableInformation.getThrowable().getClass().getCanonicalName());
-            }
-            if (throwableInformation.getThrowable().getMessage() != null) {
-                addEventData("error.message", throwableInformation.getThrowable().getMessage());
-            }
-            if (throwableInformation.getThrowableStrRep() != null) {
-                final String stackTrace = StringUtils.join(throwableInformation.getThrowableStrRep(), "\n");
-                addEventData("error.stack_trace", stackTrace);
-            }
-        }
-
-        if (locationInfo) {
-            info = loggingEvent.getLocationInformation();
-            String data = info.getFileName();
-            if (data != "?")
-                addEventData("log.origin.file.name", data);
-            data = info.getLineNumber();
-            if (data != "?")
-                addEventData("log.origin.file.line", data);
-            data = info.getClassName();
-            if (data != "?")
-                addEventData("log.origin.class", data);
-            data = info.getMethodName();
-            if (data != "?")
-                addEventData("log.origin.function", data);
-        }
-        
-        // addEventData("ndc", ndc);
-        addEventData("log.level", loggingEvent.getLevel().toString());
-        addEventData("process.thread.name", threadName);
-
-        return logstashEvent.toString() + "\n";
+        return toString() + "\n";
     }
 
     public boolean ignoresThrowable() {
@@ -226,46 +207,81 @@ public class JSONEventLayout extends Layout {
                 if (userField[0] != null) {
                     final String key = userField[0];
                     final String val = userField[1];
-            
-                    if(val.matches("\\(.*\\)")) {
-                        if(loggerName.matches(val)) {
+
+                    if (val.matches("\\(.*\\)")) {
+                        if (loggerName.matches(val)) {
                             addEventData(key, loggerName);
                         }
-                    }
-                    else {
+                    } else {
                         try {
                             addEventData(key, Integer.parseInt(val));
                         } catch (NumberFormatException e) {
                             addEventData(key, val);
-                        }                      
+                        }
                     }
                 }
             }
         }
     }
 
+    /*
+     * public String toString() { return logstashEvent.toString(); }
+     */
     public String toString() {
-        return logstashEvent.toString();
+        String result = jsonToString(jsonEvent);
+        return result;
+    }
+
+    public String jsonToString(Map<String, Object> object) {
+        final StringBuilder str = new StringBuilder("{");
+        boolean first = true;
+        for (final Map.Entry<String, Object> entry : object.entrySet()) {
+            final String key = entry.getKey();
+            final Object value = entry.getValue();
+            if (value != null) {
+                if (!first)
+                    str.append(",");
+                else
+                    first = false;
+                str.append("\"");
+                str.append(key);
+                str.append("\":");
+                if (value instanceof Map) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> valueObject = (Map<String, Object>) value;
+                    str.append(jsonToString(valueObject));
+                } else if ((value instanceof Integer) || (value instanceof Long) || (value instanceof Float)) {
+                    str.append(value.toString());
+                } else {
+                    str.append("\"");
+                    str.append(value.toString());
+                    str.append("\"");
+                }
+            }
+        }
+        str.append("}");
+        return str.toString();
     }
 
     public void addEventData(final String keyname, final Object keyval) {
         if (null != keyval) {
             final String[] keys = keyname.split("\\.");
-            JsonObject object = logstashEvent;
+            Map<String, Object> object = jsonEvent;
             int i = 0;
             for (final String key : keys) {
                 if (++i < keys.length) {
-                    final JsonElement innerobject = object.get(key);
-                    if (innerobject != null && innerobject.isJsonObject()) {
-                        object = innerobject.getAsJsonObject();
+                    final Object innerobject = object.get(key);
+                    if (innerobject instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        final Map<String, Object> _innerObject = (Map<String, Object>) innerobject;
+                        object = _innerObject;
                     } else {
-                        final JsonObject newObject = new JsonObject();
-                        object.add(key, newObject);
+                        Map<String, Object> newObject = new HashMap<String, Object>();
+                        object.put(key, newObject);
                         object = newObject;
                     }
                 } else {
-                    final Gson gson = new Gson();
-                    object.add(key, gson.toJsonTree(keyval));
+                    object.put(key, keyval);
                 }
             }
         }

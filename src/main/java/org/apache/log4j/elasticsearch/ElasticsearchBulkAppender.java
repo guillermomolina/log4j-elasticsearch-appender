@@ -29,7 +29,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.apache.commons.codec.binary.Base64;
-
+import org.apache.log4j.Layout;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
 
@@ -42,19 +42,26 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
   private long timeout = DEFAULT_TIMEOUT;
 
   /**
-   * The default buffer size is set to 10 events.
+   * The default buffer size is set to 128 events.
    */
-  public static final int DEFAULT_BUFFER_SIZE = 20;
+  public static final int DEFAULT_BUFFER_SIZE = 128;
+
+  /**
+   * The default buffer size is set to 4096 events.
+   */
+  public static final int MAX_BUFFER_SIZE = 4096;
 
   /**
    * Event buffer.
    */
-  private final List<String> buffer = new ArrayList<String>();
+  private final List<LoggingEvent> buffer = new ArrayList<LoggingEvent>();
 
   /**
    * Buffer size.
    */
   private int bufferSize = DEFAULT_BUFFER_SIZE;
+
+  private int removedMessages = 0;
 
   /**
    * Dispatcher.
@@ -62,9 +69,18 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
   private final Thread dispatcher;
 
   /**
+   * Should location info be included in dispatched messages.
+   */
+  private boolean locationInfo = false;
+
+  /**
    * Create new instance.
    */
   public ElasticsearchBulkAppender() {
+    LogLog.setInternalDebugging(true);
+    LogLog.setQuietMode(false);
+    LogLog.debug("ElasticsearchBulkAppender constructor.");
+
     dispatcher = new Thread(new Dispatcher(this, buffer));
 
     // It is the user's responsibility to close appenders before
@@ -81,8 +97,22 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
    * {@inheritDoc}
    */
   public void append(final LoggingEvent event) {
+    // Set the NDC and thread name for the calling thread as these
+    // LoggingEvent fields were not set at event creation time.
+    event.getNDC();
+    event.getThreadName();
+    // Get a copy of this thread's MDC.
+    event.getMDCCopy();
+    if (locationInfo) {
+      event.getLocationInformation();
+    }
+
     synchronized (buffer) {
-      buffer.add(this.layout.format(event));
+      if (buffer.size() > MAX_BUFFER_SIZE) {
+        removedMessages++;
+        buffer.remove(0);
+      }
+      buffer.add(event);
       if (buffer.size() >= bufferSize)
         buffer.notifyAll();
     }
@@ -106,8 +136,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       dispatcher.join();
     } catch (final InterruptedException e) {
       Thread.currentThread().interrupt();
-      org.apache.log4j.helpers.LogLog
-          .error("Got an InterruptedException while waiting for the " + "dispatcher to finish.", e);
+      LogLog.error("Got an InterruptedException while waiting for the " + "dispatcher to finish.", e);
     }
   }
 
@@ -145,7 +174,6 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
     return bufferSize;
   }
 
-
   /**
    * Set the timeout property
    */
@@ -162,6 +190,32 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
     return timeout;
   }
 
+  /**
+   * Gets whether the location of the logging request call should be captured.
+   *
+   * @return the current value of the <b>LocationInfo</b> option.
+   */
+  public boolean getLocationInfo() {
+    return locationInfo;
+  }
+
+  /**
+   * The <b>LocationInfo</b> option takes a boolean value. By default, it is set
+   * to false which means there will be no effort to extract the location
+   * information related to the event. As a result, the event that will be
+   * ultimately logged will likely to contain the wrong location information (if
+   * present in the log format).
+   * <p/>
+   * <p/>
+   * Location information extraction is comparatively very slow and should be
+   * avoided unless performance is not a concern.
+   * </p>
+   * 
+   * @param flag true if location information should be extracted.
+   */
+  public void setLocationInfo(final boolean flag) {
+    locationInfo = flag;
+  }
 
   /**
    * Event dispatcher.
@@ -175,7 +229,9 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
     /**
      * Event buffer.
      */
-    private final List<String> buffer;
+    private final List<LoggingEvent> buffer;
+
+    private Layout layout;
 
     /**
      * Create new instance of dispatcher.
@@ -183,9 +239,10 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
      * @param parent parent ElasticsearchBulkAppender, may not be null.
      * @param buffer event buffer, may not be null.
      */
-    public Dispatcher(final ElasticsearchBulkAppender parent, final List<String> buffer) {
+    public Dispatcher(final ElasticsearchBulkAppender parent, final List<LoggingEvent> buffer) {
       this.parent = parent;
       this.buffer = buffer;
+      this.layout = parent.layout;
     }
 
     /**
@@ -202,7 +259,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
         // loop until the ElasticsearchBulkAppender is closed.
         //
         while (isActive) {
-          String[] events = null;
+          LoggingEvent[] events = null;
 
           //
           // extract pending events while synchronized
@@ -219,26 +276,33 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
             }
 
             if (bufferSize > 0) {
-              events = new String[bufferSize];
+              events = new LoggingEvent[bufferSize];
               buffer.toArray(events);
-
-              //
-              // clear buffer and discard map
-              //
               buffer.clear();
-
-              //
-              // allow blocked appends to continue
               buffer.notifyAll();
+
+              if (parent.removedMessages > 0) {
+                LogLog.warn("Too many messages, " + parent.removedMessages + " have been removed");
+                parent.removedMessages = 0;
+              }
+              if (layout == null) {
+                layout = parent.layout;
+              }
             }
           }
 
           //
           // process events after lock on buffer is released.
           //
-          if (events != null) {
+          if (events != null && layout != null) {
+            String[] docs = new String[events.length];
+            for (int i = 0; i < events.length; i++) {
+              final LoggingEvent event = events[i];
+              final String doc = layout.format(event);
+              docs[i] = doc;
+            }
             try {
-              postEvents(events);
+              postEvents(docs);
             } catch (IOException e) {
             }
           }
@@ -255,7 +319,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
      * @throws IOException if an I/O exception occurs while creating/writing/
      *                     reading the request
      */
-    public void postEvents(final String[] events) throws IOException {
+    public void postEvents(final String[] docs) throws IOException {
       URL url = parent.getURL();
       if (url == null)
         return;
@@ -277,7 +341,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       connection.setRequestProperty("Content-Type", "application/x-ndjson");
       final StringBuffer data = new StringBuffer();
       final String emptyJSON = "{\"index\":{}}\n";
-      for (final String doc : events) {
+      for (final String doc : docs) {
         data.append(emptyJSON);
         data.append(doc);
       }
@@ -290,10 +354,12 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       InputStream inputStream;
       if (responseCode == HttpURLConnection.HTTP_OK) {
         inputStream = connection.getInputStream();
-        LogLog.debug(parent.toString(inputStream));
+        String result = parent.toString(inputStream);
+        LogLog.debug(result);
       } else {
         inputStream = connection.getErrorStream();
-        LogLog.error(parent.toString(inputStream));
+        String result = parent.toString(inputStream);
+        LogLog.error(result);
       }
       if (inputStream != null) {
         inputStream.close();
