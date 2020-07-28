@@ -1,5 +1,11 @@
 # Change log for Solaris OCI CLI
 
+## 2020-07-16: Version 1.3
+
+- Back to gson to avoid escaping issues
+- Take out commons-io dependency
+- Send in UTF-8 charset
+
 ## 2020-07-16: Version 1.2
 
 - Added custom JSON handling, gson is no longer needed

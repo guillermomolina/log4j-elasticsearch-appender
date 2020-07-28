@@ -348,7 +348,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       final String dataString = data.toString();
       final OutputStream outputStream = connection.getOutputStream();
       LogLog.debug(dataString);
-      outputStream.write(dataString.getBytes());
+      outputStream.write(dataString.getBytes(UTF8_CHARSET));
       outputStream.close();
       final int responseCode = connection.getResponseCode();
       InputStream inputStream;

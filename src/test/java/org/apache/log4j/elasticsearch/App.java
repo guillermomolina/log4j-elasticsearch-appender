@@ -13,16 +13,12 @@ public class App {
 
         final ElasticsearchBulkAppender app = new ElasticsearchBulkAppender();
         app.setLayout(layout);
-        app.setServer("elasticsearch.gestio.sys");
-        app.setPort(9202);
-        app.setUsername("elastic");
-        app.setPassword("3ntradA9");
         app.setIndex("jboss");
         app.activateOptions();
 
         l.addAppender(app);
 
-        l.warn("first");
+        l.warn("fir\\nst");
         l.warn("second");
         l.warn("third");
         l.warn("fourth");

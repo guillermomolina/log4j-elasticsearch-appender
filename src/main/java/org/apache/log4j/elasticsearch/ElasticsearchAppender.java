@@ -23,6 +23,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.nio.charset.Charset;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
@@ -39,6 +40,8 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   public static final int DEFAULT_PORT = 9200;
   public static final String DEFAULT_INDEX = "jboss";
   public static final String DEFAULT_DOC_TYPE = "_doc";
+
+  protected final static Charset UTF8_CHARSET = Charset.forName("UTF-8");
 
   protected String protocol = DEFAULT_PROTOCOL;
   protected String server = DEFAULT_SERVER;
@@ -239,7 +242,7 @@ public class ElasticsearchAppender extends AppenderSkeleton {
     connection.setRequestMethod("POST");
     connection.setRequestProperty("Content-Type", "application/json");
     final OutputStream outputStream = connection.getOutputStream();
-    outputStream.write(doc.getBytes());
+    outputStream.write(doc.getBytes(UTF8_CHARSET));
     outputStream.close();
     final int responseCode = connection.getResponseCode();
     InputStream inputStream;

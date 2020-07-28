@@ -25,6 +25,9 @@ package org.apache.log4j.elasticsearch;
 
 import org.apache.log4j.elasticsearch.data.HostData;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.apache.log4j.Layout;
@@ -32,9 +35,6 @@ import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LocationInfo;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.ThrowableInformation;
-
-import java.util.HashMap;
-import java.util.Map;
 import java.util.TimeZone;
 
 public class JSONEventLayout extends Layout {
@@ -47,13 +47,12 @@ public class JSONEventLayout extends Layout {
     private final HostData hostData = new HostData();
     // private String ndc;
 
-    // private JsonObject logstashEvent;
-    private Map<String, Object> jsonEvent;
+    private JsonObject jsonEvent;
 
     public static final TimeZone UTC = TimeZone.getTimeZone("UTC");
     public static final FastDateFormat ISO_DATETIME_TIME_ZONE_FORMAT_WITH_MILLIS = FastDateFormat
             .getInstance("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", UTC);
-    public static final String ADDITIONAL_DATA_PROPERTY = "net.logstash.log4j.JSONEventLayout.UserFields";
+    public static final String ADDITIONAL_DATA_PROPERTY = "org.apache.log4j.elasticsearch.JSONEventLayout.UserFields";
 
     public static String dateFormat(final long timestamp) {
         return ISO_DATETIME_TIME_ZONE_FORMAT_WITH_MILLIS.format(timestamp);
@@ -85,8 +84,8 @@ public class JSONEventLayout extends Layout {
 
         jsonEvent = hostData.getCopy();
 
-        jsonEvent.put("@timestamp", timestamp);
-        jsonEvent.put("message", loggingEvent.getRenderedMessage());
+        jsonEvent.addProperty("@timestamp", timestamp);
+        jsonEvent.addProperty("message", loggingEvent.getRenderedMessage());
 
         if (!activeIgnoreThrowable && loggingEvent.getThrowableInformation() != null) {
             final ThrowableInformation throwableInformation = loggingEvent.getThrowableInformation();
@@ -95,23 +94,26 @@ public class JSONEventLayout extends Layout {
             final String[] stackTrace = throwableInformation.getThrowableStrRep();
 
             if (type != null || message != null || stackTrace != null) {
-                Map<String, Object> error = new HashMap<String, Object>();
-                jsonEvent.put("error", error);
+                final JsonObject error = new JsonObject();
+                jsonEvent.add("error", error);
 
                 if (type != null)
-                    error.put("type", type);
+                    error.addProperty("type", type);
                 if (message != null)
-                    error.put("message", message);
-                if (stackTrace != null)
-                    error.put("stack_trace", StringUtils.join(stackTrace, "\n"));
+                    error.addProperty("message", message.replace("\"", "\\\""));
+                if (stackTrace != null) {
+                    if (stackTrace.length >= 1)
+                        stackTrace[0] = stackTrace[0].replace("\"", "\\\"");
+                    error.addProperty("stack_trace", StringUtils.join(stackTrace, "\n"));
+                }
             }
         }
 
-        Map<String, Object> log = new HashMap<String, Object>();
-        jsonEvent.put("log", log);
-        log.put("logger", loggerName);
-        log.put("level", loggingEvent.getLevel().toString());
-        
+        final JsonObject log = new JsonObject();
+        jsonEvent.add("log", log);
+        log.addProperty("logger", loggerName);
+        log.addProperty("level", loggingEvent.getLevel().toString());
+
         if (locationInfo) {
             final LocationInfo info = loggingEvent.getLocationInformation();
             final String file_name = info.getFileName();
@@ -120,15 +122,15 @@ public class JSONEventLayout extends Layout {
             final String method_name = info.getMethodName();
 
             if (file_name != "?" && line_number != "?" && class_name != "?" && method_name != "?") {
-                Map<String, Object> origin = new HashMap<String, Object>();
-                log.put("origin", origin);
-                origin.put("class", class_name);
-                origin.put("function", method_name);
-                Map<String, Object> file = new HashMap<String, Object>();
-                origin.put("file", file);
-                file.put("name", file_name);
+                final JsonObject origin = new JsonObject();
+                log.add("origin", origin);
+                origin.addProperty("class", class_name);
+                origin.addProperty("function", method_name);
+                final JsonObject file = new JsonObject();
+                origin.add("file", file);
+                file.addProperty("name", file_name);
                 try {
-                    file.put("line", Integer.parseInt(line_number));
+                    file.addProperty("line", Integer.parseInt(line_number));
                 } catch (final NumberFormatException e) {
                 }
 
@@ -215,7 +217,7 @@ public class JSONEventLayout extends Layout {
                     } else {
                         try {
                             addEventData(key, Integer.parseInt(val));
-                        } catch (NumberFormatException e) {
+                        } catch (final NumberFormatException e) {
                             addEventData(key, val);
                         }
                     }
@@ -225,65 +227,34 @@ public class JSONEventLayout extends Layout {
     }
 
     /*
-     * public String toString() { return logstashEvent.toString(); }
+     * public String toString()
      */
     public String toString() {
-        String result = jsonToString(jsonEvent);
+        final String result = jsonEvent.toString();
         return result;
-    }
-
-    public String jsonToString(Map<String, Object> object) {
-        final StringBuilder str = new StringBuilder("{");
-        boolean first = true;
-        for (final Map.Entry<String, Object> entry : object.entrySet()) {
-            final String key = entry.getKey();
-            final Object value = entry.getValue();
-            if (value != null) {
-                if (!first)
-                    str.append(",");
-                else
-                    first = false;
-                str.append("\"");
-                str.append(key);
-                str.append("\":");
-                if (value instanceof Map) {
-                    @SuppressWarnings("unchecked")
-                    Map<String, Object> valueObject = (Map<String, Object>) value;
-                    str.append(jsonToString(valueObject));
-                } else if ((value instanceof Integer) || (value instanceof Long) || (value instanceof Float)) {
-                    str.append(value.toString());
-                } else {
-                    str.append("\"");
-                    str.append(value.toString());
-                    str.append("\"");
-                }
-            }
-        }
-        str.append("}");
-        return str.toString();
     }
 
     public void addEventData(final String keyname, final Object keyval) {
         if (null != keyval) {
             final String[] keys = keyname.split("\\.");
-            Map<String, Object> object = jsonEvent;
+            JsonObject object = jsonEvent;
             int i = 0;
             for (final String key : keys) {
                 if (++i < keys.length) {
-                    final Object innerobject = object.get(key);
-                    if (innerobject instanceof Map) {
-                        @SuppressWarnings("unchecked")
-                        final Map<String, Object> _innerObject = (Map<String, Object>) innerobject;
-                        object = _innerObject;
+                    final JsonElement innerobject = object.get(key);
+                    if (innerobject != null && innerobject.isJsonObject()) {
+                        object = innerobject.getAsJsonObject();
                     } else {
-                        Map<String, Object> newObject = new HashMap<String, Object>();
-                        object.put(key, newObject);
+                        final JsonObject newObject = new JsonObject();
+                        object.add(key, newObject);
                         object = newObject;
                     }
                 } else {
-                    object.put(key, keyval);
+                    final Gson gson = new Gson();
+                    object.add(key, gson.toJsonTree(keyval));
                 }
             }
         }
     }
+
 }

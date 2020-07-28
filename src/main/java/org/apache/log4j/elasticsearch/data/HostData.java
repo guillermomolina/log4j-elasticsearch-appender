@@ -23,6 +23,7 @@ https://github.com/logstash/log4j-jsonevent-layout/blob/master/src/main/java/net
 
 package org.apache.log4j.elasticsearch.data;
 
+import com.google.gson.JsonObject;
 import java.lang.management.ManagementFactory;
 import java.lang.management.RuntimeMXBean;
 import java.net.UnknownHostException;
@@ -33,7 +34,7 @@ public class HostData {
     private String hostName;
     private int pid;
     Map<String, String> systemProperties;
-    Map<String, Object> hostData;
+    private JsonObject hostData;
 
     public String getSystemProperty(final String property) {
         return systemProperties.get(property);
@@ -76,44 +77,44 @@ public class HostData {
         }
         if (this.systemProperties == null)
             this.systemProperties = new HashMap<String,String>();
-        buildeHostData();
+        buildHostData();
     }
 
-    private void buildeHostData() {
-        hostData = new HashMap<String,Object>();
-        hostData.put("@version", 1);
+    private void buildHostData() {
+        hostData = new JsonObject();
+        hostData.addProperty("@version", 1);
 
-        Map<String,Object> host = new HashMap<String,Object>();
-        hostData.put("host", host);
+        final JsonObject host = new JsonObject();
+        hostData.add("host", host);
 
-        host.put("name", getHostName());
-        host.put("architecture", getSystemProperty("os.arch"));
+        host.addProperty("name", getHostName());
+        host.addProperty("architecture", getSystemProperty("os.arch"));
 
-        Map<String,Object> os = new HashMap<String,Object>();
-        host.put("os", os);
+        final JsonObject os = new JsonObject();
+        host.add("os", os);
 
-        os.put("name", getSystemProperty("os.name"));
-        os.put("version", getSystemProperty("os.version"));
+        os.addProperty("name", getSystemProperty("os.name"));
+        os.addProperty("version", getSystemProperty("os.version"));
 
 
-        Map<String,Object> process = new HashMap<String,Object>();
-        hostData.put("process", process);
-        process.put("pid", getPID());
+        final JsonObject process = new JsonObject();
+        hostData.add("process", process);
+        process.addProperty("pid", getPID());
 
-        Map<String,Object> java = new HashMap<String,Object>();
-        hostData.put("java", java);
+        final JsonObject java = new JsonObject();
+        hostData.add("java", java);
 
-        java.put("version", getSystemProperty("java.version"));
-        java.put("vendor", getSystemProperty("java.vendor"));
-        java.put("home", getSystemProperty("java.home"));
+        java.addProperty("version", getSystemProperty("java.version"));
+        java.addProperty("vendor", getSystemProperty("java.vendor"));
+        java.addProperty("home", getSystemProperty("java.home"));
 
         try {
-            java.put("bits", Integer.parseInt(getSystemProperty("sun.arch.data.model")));
+            java.addProperty("bits", Integer.parseInt(getSystemProperty("sun.arch.data.model")));
         } catch (final NumberFormatException e) {
         }
     }
 
-    public Map<String, Object> getCopy() {
-        return new HashMap<String, Object>(hostData);
+    public JsonObject getCopy() {
+        return hostData.deepCopy();
     }
 }
