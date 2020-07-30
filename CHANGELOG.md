@@ -5,6 +5,7 @@
 - Back to gson to avoid escaping issues
 - Take out commons-io dependency
 - Send in UTF-8 charset
+- Changed error message sending to elasticsearch
 
 ## 2020-07-16: Version 1.2
 

@@ -248,12 +248,12 @@ public class ElasticsearchAppender extends AppenderSkeleton {
     InputStream inputStream;
     if (responseCode == HttpURLConnection.HTTP_CREATED) {
       inputStream = connection.getInputStream();
-      LogLog.debug(toString(inputStream));
     } else {
       inputStream = connection.getErrorStream();
-      LogLog.error(toString(inputStream));
+      LogLog.error("Error indexing docs in elasticsearch");
     }
     if (inputStream != null) {
+      LogLog.debug(toString(inputStream));
       inputStream.close();
     }
   }
