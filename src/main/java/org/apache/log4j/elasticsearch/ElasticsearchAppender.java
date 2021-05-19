@@ -23,13 +23,12 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.nio.charset.Charset;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.nio.charset.Charset;
 
 import org.apache.commons.codec.binary.Base64;
-
 import org.apache.log4j.AppenderSkeleton;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LoggingEvent;
@@ -253,7 +252,7 @@ public class ElasticsearchAppender extends AppenderSkeleton {
       LogLog.error("Error indexing docs in elasticsearch");
     }
     if (inputStream != null) {
-      LogLog.debug(toString(inputStream));
+      //LogLog.debug(toString(inputStream));
       inputStream.close();
     }
   }

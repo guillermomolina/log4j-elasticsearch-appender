@@ -23,19 +23,20 @@ https://github.com/logstash/log4j-jsonevent-layout/blob/master/src/main/java/net
 
 package org.apache.log4j.elasticsearch;
 
-import org.apache.log4j.elasticsearch.data.HostData;
+import java.util.TimeZone;
 
 import com.google.gson.Gson;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
+
 import org.apache.commons.lang.StringUtils;
 import org.apache.commons.lang.time.FastDateFormat;
 import org.apache.log4j.Layout;
+import org.apache.log4j.elasticsearch.data.HostData;
 import org.apache.log4j.helpers.LogLog;
 import org.apache.log4j.spi.LocationInfo;
 import org.apache.log4j.spi.LoggingEvent;
 import org.apache.log4j.spi.ThrowableInformation;
-import java.util.TimeZone;
 
 public class JSONEventLayout extends Layout {
     private boolean locationInfo = false;

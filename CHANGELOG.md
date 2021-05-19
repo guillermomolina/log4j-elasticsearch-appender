@@ -1,5 +1,9 @@
 # Change log for Solaris OCI CLI
 
+## 2021-05-19: Version 1.4
+
+- Show less debug output
+
 ## 2020-07-16: Version 1.3
 
 - Back to gson to avoid escaping issues

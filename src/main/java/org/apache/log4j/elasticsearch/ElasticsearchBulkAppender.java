@@ -21,10 +21,8 @@ package org.apache.log4j.elasticsearch;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-
 import java.net.HttpURLConnection;
 import java.net.URL;
-
 import java.util.ArrayList;
 import java.util.List;
 
@@ -79,7 +77,6 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
   public ElasticsearchBulkAppender() {
     LogLog.setInternalDebugging(true);
     LogLog.setQuietMode(false);
-    LogLog.debug("ElasticsearchBulkAppender constructor.");
 
     dispatcher = new Thread(new Dispatcher(this, buffer));
 
@@ -347,7 +344,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       }
       final String dataString = data.toString();
       final OutputStream outputStream = connection.getOutputStream();
-      LogLog.debug(dataString);
+      //LogLog.debug(dataString);
       outputStream.write(dataString.getBytes(UTF8_CHARSET));
       outputStream.close();
       final int responseCode = connection.getResponseCode();
@@ -355,7 +352,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       if (responseCode == HttpURLConnection.HTTP_OK) {
         inputStream = connection.getInputStream();
         String result = parent.toString(inputStream);
-        LogLog.debug(result);
+        //LogLog.debug(result);
       } else {
         inputStream = connection.getErrorStream();
         String result = parent.toString(inputStream);
