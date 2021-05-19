@@ -145,7 +145,7 @@ public class JSONEventLayout extends Layout {
          */
         if (getUserFields() != null) {
             final String userFlds = getUserFields();
-            LogLog.debug("[" + whoami + "] Got user data from log4j property: " + userFlds);
+            //LogLog.debug("[" + whoami + "] Got user data from log4j property: " + userFlds);
             addUserFields(userFlds, loggerName);
         }
 
