@@ -23,6 +23,8 @@ https://github.com/logstash/log4j-jsonevent-layout/blob/master/src/main/java/net
 
 package org.apache.log4j.elasticsearch;
 
+import java.util.Arrays;
+import java.util.Set;
 import java.util.TimeZone;
 
 import com.google.gson.Gson;
@@ -41,6 +43,7 @@ import org.apache.log4j.spi.ThrowableInformation;
 public class JSONEventLayout extends Layout {
     private boolean locationInfo = false;
     private String customUserFields;
+    private String customMDCProperties;
 
     private final boolean ignoreThrowable = false;
 
@@ -54,6 +57,7 @@ public class JSONEventLayout extends Layout {
     public static final FastDateFormat ISO_DATETIME_TIME_ZONE_FORMAT_WITH_MILLIS = FastDateFormat
             .getInstance("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", UTC);
     public static final String ADDITIONAL_DATA_PROPERTY = "org.apache.log4j.elasticsearch.JSONEventLayout.UserFields";
+    public static final String ADDITIONAL_MDC_PROPERTY = "org.apache.log4j.elasticsearch.JSONEventLayout.MDCProperties";
 
     public static String dateFormat(final long timestamp) {
         return ISO_DATETIME_TIME_ZONE_FORMAT_WITH_MILLIS.format(timestamp);
@@ -140,13 +144,18 @@ public class JSONEventLayout extends Layout {
 
         addEventData("process.thread.name", loggingEvent.getThreadName());
 
+
+        String ndc = loggingEvent.getNDC();
+        if (ndc != null) {
+            addEventData("jboss.ndc", loggingEvent.getThreadName());
+        }
+
         /**
          * Extract and add fields from log4j config, if defined
          */
         if (getUserFields() != null) {
-            final String userFlds = getUserFields();
-            //LogLog.debug("[" + whoami + "] Got user data from log4j property: " + userFlds);
-            addUserFields(userFlds, loggerName);
+            final String userFieldsProperty = getUserFields();
+            addUserFields(userFieldsProperty, loggerName);
         }
 
         /**
@@ -162,6 +171,41 @@ public class JSONEventLayout extends Layout {
             LogLog.debug("[" + whoami + "] Got user data from system property: " + userFieldsProperty);
             addUserFields(userFieldsProperty, loggerName);
         }
+
+        /**
+         * Extract and add mdc properties from log4j config, if defined
+         */
+        String mdcProps = getMDCProperties();
+
+        /**
+         * Extract mdc properties from system properties, if defined Note that CLI props will
+         * override conflicts with log4j config
+         */
+        if (System.getProperty(ADDITIONAL_MDC_PROPERTY) != null) {
+            if (mdcProps != null) {
+                LogLog.warn("[" + whoami
+                        + "] Loading mdcProperties from command-line. This will override any mdcProperties set in the log4j configuration file");
+            }
+            mdcProps = System.getProperty(ADDITIONAL_MDC_PROPERTY);
+            LogLog.debug("[" + whoami + "] Got user data from system property: " + mdcProps);
+        }
+
+        if (mdcProps != null) {
+            final String[] pairs = mdcProps.split(",");
+            for (final String pair : pairs) {
+                final String[] mdcField = pair.split(":", 2);
+                if (mdcField[0] != null) {
+                    final String key = mdcField[0];
+                    final String mdcKey = mdcField[1];
+
+                    final Object val = loggingEvent.getMDC(mdcKey);
+                    if (val != null) {
+                        addEventData(key, String.valueOf(val));
+                    }
+                }
+            }
+        }
+
 
         return toString() + "\n";
     }
@@ -190,16 +234,16 @@ public class JSONEventLayout extends Layout {
         this.locationInfo = locationInfo;
     }
 
+    public void activateOptions() {
+        activeIgnoreThrowable = ignoreThrowable;
+    }
+
     public String getUserFields() {
         return customUserFields;
     }
 
     public void setUserFields(final String userFields) {
         this.customUserFields = userFields;
-    }
-
-    public void activateOptions() {
-        activeIgnoreThrowable = ignoreThrowable;
     }
 
     public void addUserFields(final String data, final String loggerName) {
@@ -225,6 +269,14 @@ public class JSONEventLayout extends Layout {
                 }
             }
         }
+    }
+
+    public String getMDCProperties() {
+        return customMDCProperties;
+    }
+
+    public void setMDCProperties(final String mdcProperties) {
+        this.customMDCProperties = mdcProperties;
     }
 
     /*

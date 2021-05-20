@@ -142,6 +142,13 @@ If the value is in between parentheses it is matched against the logger name as 
 }
 ```
 
+### MDC Properties
+
+MDCProperties is a comma separated list of <key>:<mdc_key> pairs, that will be added to the output.
+
+The <key> element has the same structure and usage as in the user fiedls. 
+The <mdc_key> element is an MDC property such as "IdUser" or "IdSession"
+
 
 ## Command-line
 *Note that the command-line version will OVERRIDE any values specified in the config file should there be a key conflict!*

@@ -10,6 +10,7 @@ public class App {
 
         final JSONEventLayout layout = new JSONEventLayout();
         layout.setUserFields("base.entorn:produccio,base.node:2,base.paquetbase:((cat|es)\\.base\\.(.*))");
+        layout.setMDCProperties("user.name:mdcIdUser,user.session.id:mdcIdSessio");
 
         final ElasticsearchBulkAppender app = new ElasticsearchBulkAppender();
         app.setLayout(layout);
