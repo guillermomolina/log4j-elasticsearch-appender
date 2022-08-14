@@ -1,5 +1,11 @@
 # Change log for Solaris OCI CLI
 
+## 2022-08-14: Version 1.6
+
+- Bumped gson from 2.8.2 to 2.8.9 
+- Added support for Elasticsearch 8
+
+
 ## 2021-05-19: Version 1.5
 
 - Show less debug output

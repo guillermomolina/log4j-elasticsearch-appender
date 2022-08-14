@@ -317,11 +317,9 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
      *                     reading the request
      */
     public void postEvents(final String[] docs) throws IOException {
-      URL url = parent.getURL();
-      if (url == null)
+      URL bulkURL = parent.getBulkURL();
+      if (bulkURL == null)
         return;
-
-      URL bulkURL = new URL(url, "_bulk");
 
       final HttpURLConnection connection = (HttpURLConnection) bulkURL.openConnection();
 
@@ -344,7 +342,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       }
       final String dataString = data.toString();
       final OutputStream outputStream = connection.getOutputStream();
-      //LogLog.debug(dataString);
+      LogLog.debug(dataString);
       outputStream.write(dataString.getBytes(UTF8_CHARSET));
       outputStream.close();
       final int responseCode = connection.getResponseCode();
@@ -352,7 +350,7 @@ public class ElasticsearchBulkAppender extends ElasticsearchAppender {
       if (responseCode == HttpURLConnection.HTTP_OK) {
         inputStream = connection.getInputStream();
         String result = parent.toString(inputStream);
-        //LogLog.debug(result);
+        LogLog.debug(result);
       } else {
         inputStream = connection.getErrorStream();
         String result = parent.toString(inputStream);

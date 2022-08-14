@@ -58,9 +58,9 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   }
 
   /**
-   * return logUrl
+   * return server property
    * 
-   * @return logUrl
+   * @return server
    */
   public String getServer() {
     return server;
@@ -74,9 +74,9 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   }
 
   /**
-   * return logUrl
+   * return protocol
    * 
-   * @return logUrl
+   * @return protocol
    */
   public String getProtocol() {
     return protocol;
@@ -90,9 +90,9 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   }
 
   /**
-   * return logUrl
+   * return port
    * 
-   * @return logUrl
+   * @return port
    */
   public int getPort() {
     return port;
@@ -169,7 +169,31 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   protected URL url;
 
   public URL getURL() {
-    return url;
+      return url;
+  }
+
+  public URL getDocURL() {
+    if (url == null)
+      return null;
+    try {
+        return new URL(url, docType);
+    } catch (MalformedURLException mue) {
+      String errMsg = "An exception: " + mue + " was thrown trying to send the resquest to the server URL: " + url.toString();
+      LogLog.error(errMsg);
+    }
+    return null;
+  }
+
+  public URL getBulkURL() {
+    if (url == null)
+      return null;
+    try {
+        return new URL(url, "_bulk");
+    } catch (MalformedURLException mue) {
+      String errMsg = "An exception: " + mue + " was thrown trying to send the resquest to the server URL: " + url.toString();
+      LogLog.error(errMsg);
+    }
+    return null;
   }
 
 
@@ -202,7 +226,7 @@ public class ElasticsearchAppender extends AppenderSkeleton {
   @Override
   public void activateOptions() {
     try {
-      url = new URL(protocol, server, port, "/" + index + "/" + docType + "/");
+      url = new URL(protocol, server, port, "/" + index + "/");
     } catch (MalformedURLException e) {
       LogLog.error(e.getMessage());
     }
@@ -229,7 +253,7 @@ public class ElasticsearchAppender extends AppenderSkeleton {
    *                     reading the request
    */
   public void postItem(final String doc) throws IOException {
-    final HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+    final HttpURLConnection connection = (HttpURLConnection) getDocURL().openConnection();
 
     if (username != null && password != null) {
       final String userpass = username + ":" + password;
@@ -252,7 +276,7 @@ public class ElasticsearchAppender extends AppenderSkeleton {
       LogLog.error("Error indexing docs in elasticsearch");
     }
     if (inputStream != null) {
-      //LogLog.debug(toString(inputStream));
+      LogLog.debug(toString(inputStream));
       inputStream.close();
     }
   }

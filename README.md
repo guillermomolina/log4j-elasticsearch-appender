@@ -49,7 +49,7 @@ Protocol | String | http | Protocol of the API, http or https
 Server | String | localhost | Elasticsearch server
 Port | Integer | 9200 | Port of the server 
 Index | String | jboss | Elasticsearch destination index 
-DocType | String | _doc | Document type
+DocType | String | _doc | Document type (Must be set to _doc for Elasticsearch >= 8)
 Username | String | | Username for basic authentication (if required)
 Password | String | | Password for basic authentication (if required)
 
@@ -67,7 +67,7 @@ Timeout | Integer | 5000 | Timeout to force the sending of messages in milliseco
 JSONEventLayout is heavily based on [log4j-jsonevent-layout](https://github.com/logstash/log4j-jsonevent-layout), but the output is ECS compliant. As it is a separate log4j Layout, it can be used in the other appenders that support it. 
 
 # Usage
-This is just a quick snippit of a `log4j.properties` file:
+This is just a quick snippet of a `log4j.properties` file:
 
 ```
 log4j.rootCategory=WARN, RollingLog
